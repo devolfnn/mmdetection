@@ -95,6 +95,7 @@ data = dict(
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
         pipeline=test_pipeline))
+evaluation = dict(interval=1, metric='bbox')
 # optimizer
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
@@ -116,7 +117,6 @@ log_config = dict(
 # yapf:enable
 # runtime settings
 total_epochs = 24
-device_ids = range(4)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = './work_dirs/fovea_align_gn_ms_r101_fpn_4gpu_2x'
