@@ -19,6 +19,27 @@ def test_standard_anchor_generator():
     assert anchor_generator is not None
 
 
+def test_strides():
+    from mmdet.core import AnchorGenerator
+    # Square strides
+    self = AnchorGenerator([10], [1.], [1.], [10])
+    anchors = self.grid_anchors([(2, 2)], device='cpu')
+
+    expected_anchors = torch.tensor([[-5., -5., 5., 5.], [5., -5., 15., 5.],
+                                     [-5., 5., 5., 15.], [5., 5., 15., 15.]])
+
+    assert torch.equal(anchors[0], expected_anchors)
+
+    # Different strides in x and y direction
+    self = AnchorGenerator([(10, 20)], [1.], [1.], [10])
+    anchors = self.grid_anchors([(2, 2)], device='cpu')
+
+    expected_anchors = torch.tensor([[-5., -5., 5., 5.], [5., -5., 15., 5.],
+                                     [-5., 15., 5., 25.], [5., 15., 15., 25.]])
+
+    assert torch.equal(anchors[0], expected_anchors)
+
+
 def test_ssd_anchor_generator():
     from mmdet.core.anchor import build_anchor_generator
     if torch.cuda.is_available():
@@ -87,6 +108,84 @@ def test_ssd_anchor_generator():
     # check anchor generation
     anchors = anchor_generator.grid_anchors(featmap_sizes, device)
     assert len(anchors) == 6
+
+
+def test_anchor_generator_with_tuples():
+    from mmdet.core.anchor import build_anchor_generator
+    if torch.cuda.is_available():
+        device = 'cuda'
+    else:
+        device = 'cpu'
+
+    anchor_generator_cfg = dict(
+        type='SSDAnchorGenerator',
+        scale_major=False,
+        input_size=300,
+        basesize_ratio_range=(0.15, 0.9),
+        strides=[8, 16, 32, 64, 100, 300],
+        ratios=[[2], [2, 3], [2, 3], [2, 3], [2], [2]])
+
+    featmap_sizes = [(38, 38), (19, 19), (10, 10), (5, 5), (3, 3), (1, 1)]
+    anchor_generator = build_anchor_generator(anchor_generator_cfg)
+    anchors = anchor_generator.grid_anchors(featmap_sizes, device)
+
+    anchor_generator_cfg_tuples = dict(
+        type='SSDAnchorGenerator',
+        scale_major=False,
+        input_size=300,
+        basesize_ratio_range=(0.15, 0.9),
+        strides=[(8, 8), (16, 16), (32, 32), (64, 64), (100, 100), (300, 300)],
+        ratios=[[2], [2, 3], [2, 3], [2, 3], [2], [2]])
+
+    anchor_generator_tuples = build_anchor_generator(
+        anchor_generator_cfg_tuples)
+    anchors_tuples = anchor_generator_tuples.grid_anchors(
+        featmap_sizes, device)
+    for anchor, anchor_tuples in zip(anchors, anchors_tuples):
+        assert torch.equal(anchor, anchor_tuples)
+
+
+def test_yolo_anchor_generator():
+    from mmdet.core.anchor import build_anchor_generator
+    if torch.cuda.is_available():
+        device = 'cuda'
+    else:
+        device = 'cpu'
+
+    anchor_generator_cfg = dict(
+        type='YOLOAnchorGenerator',
+        strides=[32, 16, 8],
+        base_sizes=[
+            [(116, 90), (156, 198), (373, 326)],
+            [(30, 61), (62, 45), (59, 119)],
+            [(10, 13), (16, 30), (33, 23)],
+        ])
+
+    featmap_sizes = [(14, 18), (28, 36), (56, 72)]
+    anchor_generator = build_anchor_generator(anchor_generator_cfg)
+
+    # check base anchors
+    expected_base_anchors = [
+        torch.Tensor([[-42.0000, -29.0000, 74.0000, 61.0000],
+                      [-62.0000, -83.0000, 94.0000, 115.0000],
+                      [-170.5000, -147.0000, 202.5000, 179.0000]]),
+        torch.Tensor([[-7.0000, -22.5000, 23.0000, 38.5000],
+                      [-23.0000, -14.5000, 39.0000, 30.5000],
+                      [-21.5000, -51.5000, 37.5000, 67.5000]]),
+        torch.Tensor([[-1.0000, -2.5000, 9.0000, 10.5000],
+                      [-4.0000, -11.0000, 12.0000, 19.0000],
+                      [-12.5000, -7.5000, 20.5000, 15.5000]])
+    ]
+    base_anchors = anchor_generator.base_anchors
+    for i, base_anchor in enumerate(base_anchors):
+        assert base_anchor.allclose(expected_base_anchors[i])
+
+    # check number of base anchors for each level
+    assert anchor_generator.num_base_anchors == [3, 3, 3]
+
+    # check anchor generation
+    anchors = anchor_generator.grid_anchors(featmap_sizes, device)
+    assert len(anchors) == 3
 
 
 def test_retina_anchor():
